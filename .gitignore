@@ -1,0 +1,6 @@
+.env
+python/progreso_relevo.json
+__pycache__/
+.venv/
+python/datos/
+datos/

@@ -1,0 +1,115 @@
+# ---------------------------------------------------------------------------
+#  Entorno del curso · Almacenamiento, visualización y procesamiento de datos
+#  Máster en IA · Universidad Loyola · 2026/27
+#
+#  Un solo archivo para todo el curso. Cada clase arranca solo lo que necesita:
+#
+#    Sesiones 2 a 5 (SQL y ETL):   docker compose up -d
+#                                  -> PostgreSQL con Northwind + pgAdmin
+#    Sesión 6 (Redis y MongoDB):   docker compose --profile redis --profile mongo up -d
+#                                  -> lo anterior + Redis + MongoDB + mongo-express
+#    Sesiones 7 a 9 (Power BI):    docker compose up -d
+#
+#  Apagar sin perder datos:   docker compose --profile mongo --profile redis down
+#  Borrar todo y empezar:     docker compose --profile mongo --profile redis down -v
+#
+#  Usuarios, contraseñas y puertos: archivo .env (copia de .env.example)
+# ---------------------------------------------------------------------------
+
+services:
+
+  # ---------- SQL (siempre arranca) ----------
+  postgres:
+    image: postgres:16
+    container_name: curso-postgres
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - datos_postgres:/var/lib/postgresql/data
+      # Los scripts de initdb solo se ejecutan la PRIMERA vez (volumen vacío):
+      # cargan Northwind y el esquema 'caso' del misterio.
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: curso-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: profe@loyola.es
+      PGADMIN_DEFAULT_PASSWORD: ${POSTGRES_PASSWORD}
+      # Modo escritorio: se entra sin usuario ni contraseña
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ---------- MongoDB (sesión 6) ----------
+  mongo:
+    image: mongo:7
+    container_name: curso-mongo
+    profiles: ["mongo"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    volumes:
+      - datos_mongo:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  mongo-express:
+    image: mongo-express:latest
+    container_name: curso-mongo-express
+    profiles: ["mongo"]
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongo:27017/
+      ME_CONFIG_BASICAUTH: "false"
+      ME_CONFIG_BASICAUTH_ENABLED: "false"
+    ports:
+      - "${MONGO_EXPRESS_PORT:-8081}:8081"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ---------- Redis (sesión 6) ----------
+  redis:
+    image: redis:7
+    container_name: curso-redis
+    profiles: ["redis"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - datos_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  datos_postgres:
+  datos_mongo:
+  datos_redis:

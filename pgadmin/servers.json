@@ -1,0 +1,13 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "Northwind (Docker)",
+      "Group": "Clase SQL",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "northwind",
+      "Username": "postgres",
+      "SSLMode": "prefer"
+    }
+  }
+}
