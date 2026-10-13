@@ -29,7 +29,7 @@ SELECT c.company_name, c.country, count(o.order_id) AS cant
 FROM customers c
 LEFT JOIN orders o ON o.customer_id = c.customer_id 
 WHERE c.country = 'France'
-GROUP BY c.company_name, c.country
+GROUP BY c.company_name, c.country 
 ORDER BY cant
 
 -- Resultado (¿cuadra con el control?):Si (Total rows: 11) "Paris spécialités"	0
@@ -90,19 +90,38 @@ WHERE p.category_id = 1)
 -- ---------------------------------------------------------------------
 
 -- B1. Mecanismo: Subconsulta escalar en el WHERE: freight > (SELECT avg(freight) FROM orders).
+SELECT count(*)
+FROM orders
+WHERE freight > (SELECT avg(freight) FROM orders)
 
-
--- Resultado (¿cuadra con el control?):
+-- Resultado (¿cuadra con el control?): Sí 242
 
 -- B2. Mecanismo: IN con una subconsulta que devuelve los customer_id de los pedidos con productos de ese proveedor (orders, order_details, products y suppliers).
+SELECT count(*)
+FROM customers
+WHERE customer_id IN (
+	SELECT o.customer_id FROM orders o
+	JOIN order_details od ON od.order_id = o.order_id
+	JOIN products p ON p.product_id = od.product_id
+	JOIN suppliers s ON s.supplier_id = p.supplier_id
+	WHERE s.company_name = 'Exotic Liquids'
+	)
 
-
--- Resultado (¿cuadra con el control?):
+-- Resultado (¿cuadra con el control?): Sí 33
 
 -- B3. Mecanismo: NOT EXISTS con una subconsulta correlacionada: dentro, WHERE o.customer_id = c.customer_id AND p.category_id = 1.
+SELECT count(*)
+FROM customers c
+WHERE NOT EXISTS (
+	SELECT 1 
+	FROM orders o
+	JOIN order_details od ON od.order_id = o.order_id
+	JOIN products p ON p.product_id = od.product_id
+	WHERE o.customer_id = c.customer_id
+	AND p.category_id = 1
+	)
 
-
--- Resultado (¿cuadra con el control?):
+-- Resultado (¿cuadra con el control?): Sí 8
 
 -- B4. Mecanismo: Subconsulta en el FROM: primero cuenta las líneas de cada pedido en order_details; después calcula avg, max y min sobre esos recuentos. avg(count(*)) da error.
 
