@@ -124,25 +124,45 @@ WHERE NOT EXISTS (
 -- Resultado (¿cuadra con el control?): Sí 8
 
 -- B4. Mecanismo: Subconsulta en el FROM: primero cuenta las líneas de cada pedido en order_details; después calcula avg, max y min sobre esos recuentos. avg(count(*)) da error.
+SELECT round(avg(lineas), 2) AS media, max(lineas) AS maximo, min(lineas) AS minimo
+FROM ( SELECT order_id, count(*) AS lineas
+    FROM order_details
+    GROUP BY order_id 
+	)
 
-
--- Resultado (¿cuadra con el control?):
+-- Resultado (¿cuadra con el control?): Sí 2.60	25	1
 
 -- B5. Mecanismo: Agregación condicional: count(*) FILTER (WHERE …), o sum(CASE WHEN … THEN 1 ELSE 0 END).
+SELECT e.last_name,
+       count(o.order_id) AS pedidos,
+       count(o.order_id) FILTER (WHERE o.shipped_date > o.required_date) AS con_retraso,
+       count(o.order_id) FILTER (WHERE o.shipped_date IS NULL) AS sin_enviar
+FROM employees e
+LEFT JOIN orders o ON o.employee_id = e.employee_id
+GROUP BY e.employee_id, e.last_name
+ORDER BY pedidos DESC
 
-
--- Resultado (¿cuadra con el control?):
+-- Resultado (¿cuadra con el control?): Sí "Peacock"	156	10	5
 
 -- ---------------------------------------------------------------------
 -- PARTE C · CONJUNTOS Y COMPROBACIÓN
 -- ---------------------------------------------------------------------
 
 -- C1. Mecanismo: EXCEPT entre SELECT country FROM customers y SELECT country FROM suppliers.
+SELECT country 
+FROM customers
+EXCEPT
+SELECT country FROM suppliers
+ORDER BY country;
 
-
--- Resultado (¿cuadra con el control?):
+-- Resultado (¿cuadra con el control?): Sí "Argentina" "Austria" "Belgium" "Ireland" "Mexico" "Poland" "Portugal" "Switzerland" "Venezuela"
 
 -- C2. Mecanismo: Total de control. Primero customers, orders y order_details con GROUP BY country; después suma ese resultado (subconsulta en el FROM) y compáralo con SELECT sum(…) FROM order_details.
+SELECT c.country, round(sum(od.unit_price * od.quantity * (1 - od.discount))::numeric, 2) AS facturacion
+FROM customers c
+JOIN orders o ON o.customer_id = c.customer_id
+JOIN order_details od ON od.order_id = o.order_id
+GROUP BY c.country
+ORDER BY facturacion DESC;
 
-
--- Resultado (¿cuadra con el control?):
+-- Resultado (¿cuadra con el control?): Sí "USA"	245584.61
