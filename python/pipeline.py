@@ -107,17 +107,21 @@ WEB_REVISADO = """
     )
     SELECT *,
            CASE
-               WHEN customer_id IS NULL THEN 'cliente vacío'
-               -- B1. Añade los otros dos motivos: 'cantidad no positiva' y 'producto inexistente'
-               --     (un product_id que no está en b_products)
-               -- COMPLETA
-           END AS motivo
+                WHEN customer_id IS NULL THEN 'cliente vacío'
+                WHEN cantidad <= 0 THEN 'cantidad no positiva'
+                WHEN product_id NOT IN (SELECT product_id FROM b_products) THEN 'producto inexistente'
+            END AS motivo
     FROM tipado
 """
 
 # B2. Las líneas web válidas (motivo IS NULL) con las mismas columnas y en el mismo orden que las de Northwind.
 #     Los pedidos web no tienen empleado: employee_id va a NULL (NULL::INTEGER).
-LINEAS_WEB = None  # COMPLETA: texto de la consulta
+LINEAS_WEB = """
+    SELECT 'web' AS origen, pedido, fecha, customer_id, product_id,
+           NULL::INTEGER AS employee_id, cantidad, precio, descuento
+    FROM web_revisado
+    WHERE motivo IS NULL
+"""
 
 LINEAS_PEDIDO = """
     WITH web_revisado AS ({web_revisado}),
@@ -162,7 +166,17 @@ def plata():
 # C1. Ventas mensuales por país y categoría para Power BI: mes (primer día del mes), country,
 #     category_name, pedidos (pedidos distintos), unidades (suma de cantidad) y facturacion (2 decimales).
 #     Ordena por mes, país y categoría.
-VENTAS_MENSUALES = None  # COMPLETA: texto de la consulta
+VENTAS_MENSUALES = """
+    SELECT date_trunc('month', fecha)::DATE AS mes,
+           country,
+           category_name,
+           count(DISTINCT pedido)   AS pedidos,
+           sum(cantidad)            AS unidades,
+           round(sum(importe), 2)   AS facturacion
+    FROM p_lineas_pedido
+    GROUP BY ALL
+    ORDER BY mes, country, category_name
+"""
 
 # Características de cada cliente para un modelo (recencia, frecuencia e importe)
 CLIENTES = """
@@ -216,6 +230,14 @@ PRUEBAS = {
     # D3. Unicidad: clientes que aparecen más de una vez en oro/clientes
     # COMPLETA las tres consultas
     # "oro · ...": """SELECT ...""",
+    "plata · integridad: todo product_id existe en products":
+        "SELECT count(*) FROM p_lineas_pedido WHERE product_id NOT IN (SELECT product_id FROM b_products)",
+    "oro · ventas mensuales cuadran con plata":
+        """SELECT CASE WHEN abs((SELECT sum(facturacion) FROM o_ventas_mensuales)
+                               - (SELECT sum(importe) FROM p_lineas_pedido)) < 1 THEN 0 ELSE 1 END""",
+    "oro · un solo registro por cliente":
+        """SELECT count(*) FROM (SELECT customer_id FROM o_clientes
+                                 GROUP BY customer_id HAVING count(*) > 1)""",
 }
 
 
@@ -261,3 +283,33 @@ if __name__ == "__main__":
         print(f"\n== {etapa.upper()}")
         etapas[etapa]()
         print(f"  ({time.perf_counter() - inicio:.1f} s)")
+
+# =====================================================================
+
+# A1. orders 830 · order_details 2155 · customers 91 · products 77
+#     categories 8 · employees 9 · pedidos_web 42
+
+# A2. fecha, cantidad y precio_unitario son VARCHAR (texto).
+#     En bronce no se interpreta nada: se copia la fuente tal cual para no
+#     perder datos por formatos raros (dd/mm/aaaa, coma decimal) y se
+#     limpia después, en plata.
+
+# B3. Cuarentena: 3 filas
+#       W-1015 -> cliente vacío
+#       W-1004 -> cantidad no positiva (-3)
+#       W-1009 -> producto inexistente (999)
+#     plata/lineas_pedido: 2192 líneas (2155 Northwind + 37 web).
+#     Cuadra: 40 líneas web sin duplicados = 37 válidas + 3 en cuarentena.
+
+# C2. Tres clientes que más facturan: QUICK (111.036,31),
+#     ERNSH (106.237,53) y SAVEA (104.719,20).
+#     Días sin comprar CENTC: (rellena con la consulta)
+#     FISSA y PARIS aparecen ahora porque sus pedidos vienen de la tienda
+#     web, que se une a Northwind en plata.
+
+# D4. Sí: las 8 pruebas en OK en las dos ejecuciones, y el resumen es
+#     idéntico (2192 líneas · facturación 1.276.482,44).
+#     No se duplican datos por la función escribir: guarda el resultado
+#     en un fichero temporal y lo renombra con os.replace, de modo que
+#     sobrescribe el fichero entero en vez de añadir filas. Si falla a
+#     mitad, el fichero anterior queda intacto.
