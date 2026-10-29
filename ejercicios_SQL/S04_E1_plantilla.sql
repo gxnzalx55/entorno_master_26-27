@@ -33,8 +33,8 @@ ORDER BY facturacion DESC;
 -- Por qué: Las tres tablas son pequeñas (2155, 77 y 8 filas) y la consulta
 --          necesita leerlas enteras, sin filtro que un índice pueda aprovechar.
 --          Los dos Hash Join sacan 2155 filas cada uno (cada línea de pedido
---          encuentra su producto y su categoría) y el HashAggregate las
---   
+--          encuentra su producto y su categoría) y el HashAggregate devuelve 8 
+--          filas, una por categoría.
 
 -- Pregunta 2
 EXPLAIN ANALYZE
@@ -122,7 +122,6 @@ WHERE cliente_id = 42 AND fecha >= '2024-01-01';
 --          el resultado.
 
 -- Pregunta 6
-EXPLAIN ANALYZE
 SELECT pg_size_pretty(pg_relation_size('ventas_grandes'))          AS tabla,
        pg_size_pretty(pg_relation_size('ventas_grandes_pkey'))     AS indice_pk,
        pg_size_pretty(pg_relation_size('idx_ventas_cliente_fecha')) AS indice_cliente_fecha;
@@ -255,7 +254,6 @@ LIMIT 3;
 -- Tiempo: 0,039 ms (unas 15.000 veces más rápido que los 585,588 ms de la vista)
 -- Por qué: La vista materializada guarda el resultado ya calculado: solo tiene
 --          91 filas, una por cliente, y no hay que tocar las 2 millones de ventas.
-Por qué:
 
 -- Pregunta 14
 INSERT INTO ventas_grandes VALUES (2000001, 35, 1, '2024-12-31', 1000.00);
@@ -291,7 +289,7 @@ SELECT * FROM mv_facturacion_cliente WHERE cliente_id = 35;
 -- Resultado: 35 | 22374 ventas | 5616242.36 (valor original; la diferencia es
 --            justo la venta de 1000.00)
 -- Por qué: Hay que refrescar la vista materializada para que deje de incluir
---  
+-- la venta borrada.
 
 -- =====================================================================
 --  TUS TIEMPOS                         Diapositivas      Tu ordenador
